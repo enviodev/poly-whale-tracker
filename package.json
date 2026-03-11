@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "bun index.ts"
+    "start": "bun index.ts",
+    "build": "bun build index.ts --outdir dist --target node"
   },
   "dependencies": {
     "@envio-dev/hypersync-client": "^1.1.0",
@@ -16,5 +17,8 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "bin": {
+    "poly-whale-tracker": "./dist/index.js"
   }
 }

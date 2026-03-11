@@ -1,4 +1,8 @@
+#!/usr/bin/env node
+
 import blessed from "blessed";
+import * as fs from "fs";
+import * as path from "path";
 import {
   HypersyncClient,
   Decoder,
@@ -7,12 +11,16 @@ import {
 
 // ─── Environment ────────────────────────────────────────────────────────────
 
-const ENVIO_API_TOKEN = process.env.ENVIO_API_TOKEN;
-if (!ENVIO_API_TOKEN) {
-  console.error("ENVIO_API_TOKEN is required in env");
-  process.exit(1);
-}
+let ENVIO_API_TOKEN: string | null = process.env.ENVIO_API_TOKEN ?? null;
 const ENVIO_URL = process.env.ENVIO_URL ?? "https://polygon.hypersync.xyz";
+
+const HYPERSYNC_CONFIG_DIR = path.join(process.env.HOME ?? "~", ".hypersync");
+const HYPERSYNC_ENV_FILE = path.join(HYPERSYNC_CONFIG_DIR, ".env");
+
+// ─── HyperSync client (lazy initialized) ─────────────────────────────────────
+
+let client: HypersyncClient | null = null;
+let decoder: Decoder | null = null;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,17 +44,10 @@ type ParsedTrade = {
   timestamp: Date;
 };
 
-// ─── HyperSync setup ───────────────────────────────────────────────────────
-
-const client = new HypersyncClient({
-  url: ENVIO_URL,
-  apiToken: ENVIO_API_TOKEN,
-});
+// ─── HyperSync event signature ──────────────────────────────────────────────
 
 const ORDER_FILLED_SIG =
   "event OrderFilled(bytes32 indexed orderHash, address indexed maker, address indexed taker, uint256 makerAssetId, uint256 takerAssetId, uint256 makerAmountFilled, uint256 takerAmountFilled, uint256 fee)";
-
-const decoder = Decoder.fromSignatures([ORDER_FILLED_SIG]);
 
 const EXCHANGE_ADDRESSES = [
   "0x4bfb41d5b3570defd03c39a9a4d8de6bd8b8982e",
@@ -82,15 +83,58 @@ const parseArgs = (argv: string[]) => {
 
 const cliArgs = parseArgs(process.argv.slice(2));
 
+// ─── API Key Management ──────────────────────────────────────────────────────
+
+const loadStoredApiKey = (): string | null => {
+  try {
+    if (fs.existsSync(HYPERSYNC_ENV_FILE)) {
+      const content = fs.readFileSync(HYPERSYNC_ENV_FILE, "utf-8");
+      const match = content.match(/^ENVIO_API_TOKEN=(.+)$/m);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+  } catch (err) {
+    // Silently fail if file can't be read
+  }
+  return null;
+};
+
+const saveApiKey = (apiKey: string): boolean => {
+  try {
+    if (!fs.existsSync(HYPERSYNC_CONFIG_DIR)) {
+      fs.mkdirSync(HYPERSYNC_CONFIG_DIR, { recursive: true });
+    }
+    fs.writeFileSync(HYPERSYNC_ENV_FILE, `ENVIO_API_TOKEN=${apiKey}\n`);
+    return true;
+  } catch (err) {
+    console.error("Failed to save API key:", err);
+    return false;
+  }
+};
+
+const initializeHyperSync = (apiToken: string) => {
+  client = new HypersyncClient({
+    url: ENVIO_URL,
+    apiToken,
+  });
+  decoder = Decoder.fromSignatures([ORDER_FILLED_SIG]);
+};
+
 // ─── State ──────────────────────────────────────────────────────────────────
 
-const thresholdUsd = cliArgs.threshold;
-const watchAddresses = cliArgs.addresses;
+let thresholdUsd = cliArgs.threshold;
+let watchAddresses = cliArgs.addresses;
 let trades: ParsedTrade[] = [];
 let selectedIndex = 0;
 let isDetailView = false;
+let isThresholdPopupOpen = false;
+let isAddressPopupOpen = false;
+let isStartupConfigured = false;
 let isPolling = false;
 let pollAbort = false;
+let queryFromResetBlock: number | null = null;
+let resetCounter = 0;
 const seen = new Set<string>();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -119,9 +163,145 @@ const screen = blessed.screen({
   fullUnicode: true,
 });
 
-// ─── Title Bar ──────────────────────────────────────────────────────────────
+// ─── Startup API Key Prompt (overlay) ────────────────────────────────────────
 
-const titleBar = blessed.box({
+const startupPrompt = blessed.box({
+  parent: screen,
+  top: "center",
+  left: "center",
+  width: 70,
+  height: 14,
+  label: " {bold}🔑 HyperSync API Key{/bold} ",
+  tags: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "yellow" },
+    fg: "white",
+    bg: "black",
+    label: { fg: "yellow" },
+  },
+  padding: { left: 2, right: 2 },
+});
+
+const startupText = blessed.text({
+  parent: startupPrompt,
+  top: 0,
+  left: 0,
+  width: "100%-4",
+  tags: true,
+  content:
+    "Enter your HyperSync API key to continue.\n{gray-fg}This will be saved to ~/.hypersync/.env{/gray-fg}",
+});
+
+const startupInput = blessed.textbox({
+  parent: startupPrompt,
+  top: 3,
+  left: 0,
+  width: "100%-4",
+  height: 3,
+  inputOnFocus: true,
+  mouse: true,
+  keys: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "white" },
+    fg: "white",
+    bg: "black",
+  },
+});
+
+const startupError = blessed.text({
+  parent: startupPrompt,
+  top: 6,
+  left: 0,
+  width: "100%-4",
+  height: 2,
+  tags: true,
+  content: "",
+  style: { fg: "red" },
+});
+
+const startupHint = blessed.text({
+  parent: startupPrompt,
+  bottom: 0,
+  left: 0,
+  tags: true,
+  content: "{gray-fg}Enter submit | Esc exit{/gray-fg}",
+});
+
+const processStartupApiKey = async (apiKey: string) => {
+  const trimmed = apiKey.trim();
+  if (!trimmed) {
+    startupError.setContent("{red-fg}API key cannot be empty{/red-fg}");
+    screen.render();
+    startupInput.readInput();
+    return;
+  }
+
+  if (!trimmed.match(/^[a-zA-Z0-9\-]+$/)) {
+    startupError.setContent(
+      "{red-fg}Invalid API key format (alphanumeric and dash only){/red-fg}",
+    );
+    screen.render();
+    startupInput.readInput();
+    return;
+  }
+
+  startupText.setContent(
+    "Validating API key...\n{gray-fg}Initializing HyperSync{/gray-fg}",
+  );
+  screen.render();
+
+  try {
+    initializeHyperSync(trimmed);
+
+    if (!client) throw new Error("Client initialization failed");
+
+    await client.getHeight();
+
+    const saved = saveApiKey(trimmed);
+    if (!saved) {
+      startupError.setContent(
+        "{yellow-fg}API key validated but couldn't save to disk{/yellow-fg}",
+      );
+    }
+
+    ENVIO_API_TOKEN = trimmed;
+    isStartupConfigured = true;
+    startupPrompt.hide();
+    startupInput.destroy();
+    startupText.destroy();
+    startupError.destroy();
+    startupHint.destroy();
+
+    screen.render();
+    bootUI();
+  } catch (err) {
+    startupError.setContent(
+      `{red-fg}Failed to validate API key. Check your key and try again.{/red-fg}`,
+    );
+    startupText.setContent(
+      "Enter your HyperSync API key to continue.\n{gray-fg}This will be saved to ~/.hypersync/.env{/gray-fg}",
+    );
+    screen.render();
+    startupInput.readInput();
+  }
+};
+
+startupInput.on("submit", (value) => {
+  void processStartupApiKey(String(value ?? ""));
+});
+
+startupInput.on("cancel", () => {
+  process.exit(0);
+});
+
+// ─── UI Boot function ───────────────────────────────────────────────────────
+
+const bootUI = () => {
+  // ─── Title Bar ──────────────────────────────────────────────────────────
+
+  const titleBar = blessed.box({
   parent: screen,
   top: 0,
   left: 0,
@@ -308,6 +488,138 @@ const detailBox = blessed.box({
   },
 });
 
+// ─── Threshold Popup (overlay) ─────────────────────────────────────────────
+
+const thresholdPopup = blessed.box({
+  parent: screen,
+  top: "center",
+  left: "center",
+  width: 52,
+  height: 11,
+  label: " {bold}Set Threshold (USD){/bold} ",
+  tags: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "yellow" },
+    fg: "white",
+    bg: "black",
+    label: { fg: "yellow" },
+  },
+  hidden: true,
+  padding: { left: 1, right: 1 },
+});
+
+const thresholdPopupText = blessed.text({
+  parent: thresholdPopup,
+  top: 0,
+  left: 0,
+  tags: true,
+  content:
+    "Enter a new minimum BUY value in USD\n{gray-fg}Applying clears current trades and restarts from latest blocks.{/gray-fg}",
+});
+
+const thresholdInput = blessed.textbox({
+  parent: thresholdPopup,
+  top: 3,
+  left: 0,
+  width: "100%-2",
+  height: 3,
+  inputOnFocus: true,
+  mouse: true,
+  keys: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "white" },
+    fg: "white",
+    bg: "black",
+  },
+});
+
+const thresholdPopupError = blessed.text({
+  parent: thresholdPopup,
+  top: 6,
+  left: 0,
+  width: "100%-2",
+  height: 2,
+  tags: true,
+  content: "",
+  style: { fg: "red" },
+});
+
+const thresholdPopupHint = blessed.text({
+  parent: thresholdPopup,
+  bottom: 0,
+  left: 0,
+  tags: true,
+  content: "{gray-fg}Enter submit | Esc cancel{/gray-fg}",
+});
+
+// ─── Address Popup (overlay) ───────────────────────────────────────────────
+
+const addressPopup = blessed.box({
+  parent: screen,
+  top: "center",
+  left: "center",
+  width: 66,
+  height: 12,
+  label: " {bold}Set Watch Addresses{/bold} ",
+  tags: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "cyan" },
+    fg: "white",
+    bg: "black",
+    label: { fg: "cyan" },
+  },
+  hidden: true,
+  padding: { left: 1, right: 1 },
+});
+
+const addressPopupText = blessed.text({
+  parent: addressPopup,
+  top: 0,
+  left: 0,
+  tags: true,
+  content:
+    "Enter comma-separated wallet addresses (0x...). Leave empty to clear filter.",
+});
+
+const addressInput = blessed.textbox({
+  parent: addressPopup,
+  top: 2,
+  left: 0,
+  width: "100%-2",
+  height: 4,
+  inputOnFocus: true,
+  mouse: true,
+  keys: true,
+  border: { type: "line" },
+  style: {
+    border: { fg: "white" },
+    fg: "white",
+    bg: "black",
+  },
+});
+
+const addressPopupError = blessed.text({
+  parent: addressPopup,
+  top: 6,
+  left: 0,
+  width: "100%-2",
+  height: 2,
+  tags: true,
+  content: "",
+  style: { fg: "red" },
+});
+
+const addressPopupHint = blessed.text({
+  parent: addressPopup,
+  bottom: 0,
+  left: 0,
+  tags: true,
+  content: "{gray-fg}Enter submit | Esc cancel{/gray-fg}",
+});
+
 // ─── Help Bar ───────────────────────────────────────────────────────────────
 
 const helpBar = blessed.box({
@@ -333,10 +645,24 @@ const updateHelpBar = () => {
         "{bold}{blue-fg}↑/↓{/blue-fg}{/bold} Scroll  " +
         "{bold}{blue-fg}Q{/blue-fg}{/bold} Quit",
     );
+  } else if (isThresholdPopupOpen) {
+    helpBar.setContent(
+      "{bold}{blue-fg}Enter{/blue-fg}{/bold} Apply threshold  " +
+        "{bold}{blue-fg}Esc{/blue-fg}{/bold} Cancel  " +
+        "{gray-fg}| applies immediately and clears old trades{/gray-fg}",
+    );
+  } else if (isAddressPopupOpen) {
+    helpBar.setContent(
+      "{bold}{blue-fg}Enter{/blue-fg}{/bold} Apply address filter  " +
+        "{bold}{blue-fg}Esc{/blue-fg}{/bold} Cancel  " +
+        "{gray-fg}| applies immediately and clears old trades{/gray-fg}",
+    );
   } else {
     helpBar.setContent(
       "{bold}{blue-fg}↑/↓{/blue-fg}{/bold} Navigate  " +
         "{bold}{blue-fg}Enter{/blue-fg}{/bold} View details  " +
+        "{bold}{blue-fg}T{/blue-fg}{/bold} Set threshold  " +
+        "{bold}{blue-fg}A{/blue-fg}/{blue-fg}a{/blue-fg}{/bold} Set addresses  " +
         "{bold}{blue-fg}C{/blue-fg}{/bold} Clear trades  " +
         "{bold}{blue-fg}Q{/blue-fg}{/bold} Quit  " +
         "{gray-fg}|  -t <usd>  -a <addr1,addr2,...>{/gray-fg}",
@@ -434,6 +760,135 @@ const hideDetail = () => {
   screen.render();
 };
 
+const closeThresholdPopup = () => {
+  isThresholdPopupOpen = false;
+  thresholdPopup.hide();
+  thresholdPopupError.setContent("");
+  tradeList.focus();
+  updateHelpBar();
+  screen.render();
+};
+
+const closeAddressPopup = () => {
+  isAddressPopupOpen = false;
+  addressPopup.hide();
+  addressPopupError.setContent("");
+  tradeList.focus();
+  updateHelpBar();
+  screen.render();
+};
+
+const applyThresholdFromInput = async (rawValue: string) => {
+  const nextThreshold = Number(rawValue.trim());
+  if (!Number.isFinite(nextThreshold) || nextThreshold <= 0) {
+    thresholdPopupError.setContent(
+      "{red-fg}Please enter a positive number, e.g. 500{/red-fg}",
+    );
+    screen.render();
+    thresholdInput.readInput();
+    return;
+  }
+
+  thresholdUsd = nextThreshold;
+  trades = [];
+  seen.clear();
+  selectedIndex = 0;
+  resetCounter += 1;
+
+  if (!client) return;
+  const currentHeight = await client.getHeight();
+  queryFromResetBlock = Math.max(0, currentHeight - 1);
+
+  updateThresholdDisplay();
+  renderTradeList();
+  closeThresholdPopup();
+};
+
+const openThresholdPopup = () => {
+  if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
+
+  isThresholdPopupOpen = true;
+  thresholdPopupError.setContent("");
+  thresholdInput.setValue(String(thresholdUsd));
+  thresholdPopup.show();
+  thresholdInput.focus();
+  updateHelpBar();
+  screen.render();
+  thresholdInput.readInput();
+};
+
+const parseAddressInput = (rawValue: string): string[] | null => {
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) return [];
+
+  const parsed = trimmed
+    .split(",")
+    .map((a) => a.trim().toLowerCase())
+    .filter((a) => a.length > 0);
+
+  if (parsed.length === 0) return [];
+
+  const allValid = parsed.every((a) => a.startsWith("0x") && a.length >= 10);
+  if (!allValid) return null;
+
+  return Array.from(new Set(parsed));
+};
+
+const applyAddressesFromInput = async (rawValue: string) => {
+  const parsedAddresses = parseAddressInput(rawValue);
+  if (parsedAddresses === null) {
+    addressPopupError.setContent(
+      "{red-fg}Invalid format. Use comma-separated 0x... addresses.{/red-fg}",
+    );
+    screen.render();
+    addressInput.readInput();
+    return;
+  }
+
+  watchAddresses = parsedAddresses;
+  trades = [];
+  seen.clear();
+  selectedIndex = 0;
+  resetCounter += 1;
+
+  if (!client) return;
+  const currentHeight = await client.getHeight();
+  queryFromResetBlock = Math.max(0, currentHeight - 1);
+
+  updateAddressDisplay();
+  renderTradeList();
+  closeAddressPopup();
+};
+
+const openAddressPopup = () => {
+  if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
+
+  isAddressPopupOpen = true;
+  addressPopupError.setContent("");
+  addressInput.setValue(watchAddresses.join(","));
+  addressPopup.show();
+  addressInput.focus();
+  updateHelpBar();
+  screen.render();
+  addressInput.readInput();
+};
+
+thresholdInput.on("submit", (value) => {
+  void applyThresholdFromInput(String(value ?? ""));
+});
+
+thresholdInput.on("cancel", () => {
+  closeThresholdPopup();
+});
+
+addressInput.on("submit", (value) => {
+  void applyAddressesFromInput(String(value ?? ""));
+});
+
+addressInput.on("cancel", () => {
+  closeAddressPopup();
+});
+
 
 
 // ─── Key bindings ───────────────────────────────────────────────────────────
@@ -444,6 +899,7 @@ screen.key(["q", "C-c"], () => {
 });
 
 screen.key(["c"], () => {
+  if (isThresholdPopupOpen || isAddressPopupOpen) return;
   if (!isDetailView) {
     trades = [];
     seen.clear();
@@ -452,8 +908,16 @@ screen.key(["c"], () => {
   }
 });
 
+screen.key(["t"], () => {
+  openThresholdPopup();
+});
+
+screen.key(["a", "A", "S-a"], () => {
+  openAddressPopup();
+});
+
 screen.key(["up", "k"], () => {
-  if (isDetailView) return;
+  if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
   if (trades.length === 0) return;
   selectedIndex = Math.max(0, selectedIndex - 1);
   tradeList.select(selectedIndex);
@@ -464,7 +928,7 @@ screen.key(["up", "k"], () => {
 });
 
 screen.key(["down", "j"], () => {
-  if (isDetailView) return;
+  if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
   if (trades.length === 0) return;
   selectedIndex = Math.min(trades.length - 1, selectedIndex + 1);
   tradeList.select(selectedIndex);
@@ -475,6 +939,7 @@ screen.key(["down", "j"], () => {
 });
 
 screen.key(["enter", "return"], () => {
+  if (isThresholdPopupOpen || isAddressPopupOpen) return;
   if (isDetailView) return;
   if (trades.length === 0) return;
   const trade = trades[selectedIndex];
@@ -482,6 +947,14 @@ screen.key(["enter", "return"], () => {
 });
 
 screen.key(["escape", "backspace"], () => {
+  if (isThresholdPopupOpen) {
+    closeThresholdPopup();
+    return;
+  }
+  if (isAddressPopupOpen) {
+    closeAddressPopup();
+    return;
+  }
   if (isDetailView) hideDetail();
 });
 
@@ -531,7 +1004,7 @@ const classifyTrade = (args: {
 // ─── Polling loop ───────────────────────────────────────────────────────────
 
 const startPolling = async () => {
-  if (isPolling) return;
+  if (isPolling || !client) return;
   isPolling = true;
 
   const currentHeight = await client.getHeight();
@@ -539,6 +1012,13 @@ const startPolling = async () => {
 
   while (!pollAbort) {
     try {
+      if (queryFromResetBlock !== null) {
+        queryFrom = queryFromResetBlock;
+        queryFromResetBlock = null;
+      }
+
+      const cycleResetCounter = resetCounter;
+
       const query: Query = {
         fromBlock: queryFrom,
         logs: [
@@ -563,10 +1043,12 @@ const startPolling = async () => {
 
       const res = await client.get(query);
       const logs = (res.data as any).logs ?? [];
-      const decoded = decoder.decodeLogsSync(logs);
+      const decoded = decoder ? decoder.decodeLogsSync(logs) : [];
       let newCount = 0;
 
       for (let i = 0; i < logs.length; i++) {
+        if (cycleResetCounter !== resetCounter) break;
+
         const log = logs[i];
         const dec = decoded[i];
         if (!dec) continue;
@@ -658,11 +1140,36 @@ const startPolling = async () => {
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
-updateThresholdDisplay();
-updateAddressDisplay();
-renderTradeList();
-updateHelpBar();
-tradeList.focus();
+  updateThresholdDisplay();
+  updateAddressDisplay();
+  renderTradeList();
+  updateHelpBar();
+  tradeList.focus();
+  screen.render();
+
+  startPolling();
+};
+
+// ─── Startup ────────────────────────────────────────────────────────────────
+
 screen.render();
 
-startPolling();
+// Try to load existing API key
+const storedKey = loadStoredApiKey();
+if (storedKey) {
+  ENVIO_API_TOKEN = storedKey;
+  try {
+    initializeHyperSync(storedKey);
+    if (client) {
+      isStartupConfigured = true;
+      startupPrompt.hide();
+      bootUI();
+    }
+  } catch (err) {
+    startupInput.focus();
+    startupInput.readInput();
+  }
+} else {
+  startupInput.focus();
+  startupInput.readInput();
+}
