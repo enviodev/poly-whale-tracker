@@ -2,6 +2,8 @@
 
 A terminal UI that shows large BUY trades on Polymarket in real time.
 
+![poly-whale-tracker TUI](./assets/tui.png)
+
 ## What It Does
 
 - Streams Polymarket `OrderFilled` events from HyperSync
