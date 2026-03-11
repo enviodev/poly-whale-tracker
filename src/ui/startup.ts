@@ -25,7 +25,7 @@ export const createStartupPrompt = (screen: blessed.Widgets.Screen): {
     left: "center",
     width: 70,
     height: 14,
-    label: " {bold}🔑 HyperSync API Key{/bold} ",
+    label: " {bold}HyperSync API Key{/bold} ",
     tags: true,
     border: { type: "line" },
     style: {
@@ -34,14 +34,14 @@ export const createStartupPrompt = (screen: blessed.Widgets.Screen): {
       bg: "black",
       label: { fg: "yellow" },
     },
-    padding: { left: 2, right: 2 },
+    padding: { left: 2, right: 4 },
   });
 
   const startupText = blessed.text({
     parent: startupPrompt,
     top: 0,
     left: 0,
-    width: "100%-4",
+    width: "100%-6",
     tags: true,
     content:
       "Enter your HyperSync API key to continue.\n{gray-fg}This will be saved to ~/.hypersync/.env{/gray-fg}",
@@ -51,7 +51,7 @@ export const createStartupPrompt = (screen: blessed.Widgets.Screen): {
     parent: startupPrompt,
     top: 3,
     left: 0,
-    width: "100%-4",
+    width: "100%-6",
     height: 3,
     inputOnFocus: true,
     mouse: true,
@@ -68,7 +68,7 @@ export const createStartupPrompt = (screen: blessed.Widgets.Screen): {
     parent: startupPrompt,
     top: 6,
     left: 0,
-    width: "100%-4",
+    width: "100%-6",
     height: 2,
     tags: true,
     content: "",

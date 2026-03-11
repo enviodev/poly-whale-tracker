@@ -40,7 +40,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     left: 0,
     width: "100%",
     height: 3,
-    content: "{center}{bold} 🐋  POLYMARKET WHALE TRACKER  🐋 {/bold}{/center}",
+    content: "{center}{bold}  POLYMARKET WHALE TRACKER  {/bold}{/center}",
     tags: true,
     style: {
       fg: "white",
@@ -66,7 +66,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     left: 0,
     width: "100%",
     height: 7,
-    label: " {bold}💰 Threshold (USD){/bold} ",
+    label: " {bold}Threshold (USD){/bold} ",
     tags: true,
     border: { type: "line" },
     style: {
@@ -99,7 +99,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     left: 0,
     width: "100%",
     height: "100%-7",
-    label: " {bold}👁  Watch Addresses{/bold} {gray-fg}(optional){/gray-fg} ",
+    label: " {bold}Watch Addresses{/bold} {gray-fg}(optional){/gray-fg} ",
     tags: true,
     border: { type: "line" },
     style: {
@@ -141,9 +141,9 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: screen,
     top: 3,
     left: "30%",
-    width: "70%",
+    right: 0,
     height: "100%-6",
-    label: " {bold}📊 Live Trades{/bold} ",
+    label: " {bold}Live Trades{/bold} ",
     tags: true,
     border: { type: "line" },
     style: {
@@ -158,10 +158,10 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     top: 0,
     left: 1,
     right: 1,
-    bottom: 0,
+    bottom: 1,
     scrollable: true,
     mouse: true,
-    keys: true,
+    keys: false,
     tags: true,
     scrollbar: {
       ch: "█",
@@ -170,8 +170,8 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     style: {
       fg: "white",
       selected: {
-        fg: "black",
-        bg: "green",
+        fg: "white",
+        bg: "blue",
         bold: true,
       },
       item: {
@@ -199,7 +199,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     left: "center",
     width: "70%",
     height: "70%",
-    label: " {bold}🔍 Trade Details{/bold} ",
+    label: " {bold}Trade Details{/bold} ",
     tags: true,
     border: { type: "line" },
     style: {
@@ -242,6 +242,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: thresholdPopup,
     top: 0,
     left: 0,
+    right: 1,
     tags: true,
     content:
       "Enter a new minimum BUY value in USD\n{gray-fg}Applying clears current trades and restarts from latest blocks.{/gray-fg}",
@@ -251,7 +252,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: thresholdPopup,
     top: 3,
     left: 0,
-    width: "100%-2",
+    right: 1,
     height: 3,
     inputOnFocus: true,
     mouse: true,
@@ -268,7 +269,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: thresholdPopup,
     top: 6,
     left: 0,
-    width: "100%-2",
+    right: 1,
     height: 2,
     tags: true,
     content: "",
@@ -306,6 +307,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: addressPopup,
     top: 0,
     left: 0,
+    right: 1,
     tags: true,
     content:
       "Enter comma-separated wallet addresses (0x...). Leave empty to clear filter.",
@@ -315,7 +317,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: addressPopup,
     top: 2,
     left: 0,
-    width: "100%-2",
+    right: 1,
     height: 4,
     inputOnFocus: true,
     mouse: true,
@@ -332,7 +334,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     parent: addressPopup,
     top: 6,
     left: 0,
-    width: "100%-2",
+    right: 1,
     height: 2,
     tags: true,
     content: "",
@@ -391,6 +393,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
           "{bold}{blue-fg}T{/blue-fg}{/bold} Set threshold  " +
           "{bold}{blue-fg}A{/blue-fg}/{blue-fg}a{/blue-fg}{/bold} Set addresses  " +
           "{bold}{blue-fg}C{/blue-fg}{/bold} Clear trades  " +
+          "{bold}{blue-fg}L{/blue-fg}{/bold} Latest trade  " +
           "{bold}{blue-fg}Q{/blue-fg}{/bold} Quit  " +
           "{gray-fg}|  -t <usd>  -a <addr1,addr2,...>{/gray-fg}",
       );
@@ -630,6 +633,17 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
     openAddressPopup();
   });
 
+  screen.key(["l", "home"], () => {
+    if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
+    if (trades.length === 0) return;
+    selectedIndex = 0;
+    tradeList.select(0);
+    statusLine.setContent(
+      `{gray-fg}Threshold: $${thresholdUsd.toLocaleString()} | ${trades.length} trade${trades.length !== 1 ? "s" : ""} | 1/${trades.length}{/gray-fg}`,
+    );
+    screen.render();
+  });
+
   screen.key(["up", "k"], () => {
     if (isDetailView || isThresholdPopupOpen || isAddressPopupOpen) return;
     if (trades.length === 0) return;
@@ -792,7 +806,7 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
         }
 
         if (newCount > 0) {
-          selectedIndex = 0;
+          selectedIndex = Math.min(trades.length - 1, selectedIndex + newCount);
           renderTradeList();
         }
 
