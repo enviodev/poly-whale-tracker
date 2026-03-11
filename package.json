@@ -1,0 +1,20 @@
+{
+  "name": "poly-whale-tracker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun index.ts"
+  },
+  "dependencies": {
+    "@envio-dev/hypersync-client": "^1.1.0",
+    "blessed": "^0.1.81"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
