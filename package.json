@@ -1,5 +1,5 @@
 {
-  "name": "poly-whale-tracker",
+  "name": "poly-whales",
   "version": "0.0.1",
   "type": "module",
   "private": true,
@@ -19,6 +19,6 @@
     "typescript": "^5"
   },
   "bin": {
-    "poly-whale-tracker": "./dist/index.js"
+    "poly-whales": "./dist/index.js"
   }
 }
