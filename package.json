@@ -1,11 +1,11 @@
 {
   "name": "poly-whales",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
-  "private": true,
   "scripts": {
     "start": "bun src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target node"
+    "build": "bun build src/index.ts --outdir dist --target node --external blessed",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@envio-dev/hypersync-client": "^1.1.0",

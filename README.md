@@ -2,7 +2,7 @@
 
 A terminal UI that shows large BUY trades on Polymarket in real time.
 
-![poly-whale-tracker TUI](./assets/tui.png)
+![poly-whale-tracker TUI](https://raw.githubusercontent.com/enviodev/poly-whale-tracker/refs/heads/main/assets/tui.png)
 
 ## What It Does
 
