@@ -20,5 +20,10 @@
   },
   "bin": {
     "poly-whales": "./dist/index.js"
-  }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "assets"
+  ]
 }
