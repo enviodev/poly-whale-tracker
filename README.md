@@ -1,20 +1,26 @@
-# Polymarket Whale Tracker TUI
+# Polymarket Whale Tracker
 
-A terminal UI that shows large BUY trades on Polymarket in real time.
+[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white)](https://discord.com/invite/envio)
+
+A terminal UI (TUI) that shows large BUY trades on Polymarket in real-time, powered by [Envio HyperSync](https://docs.envio.dev/docs/HyperSync/overview).
 
 ![poly-whale-tracker TUI](https://raw.githubusercontent.com/enviodev/poly-whale-tracker/refs/heads/main/assets/tui.png)
 
-## What It Does
+## What This Does
 
-- Streams Polymarket `OrderFilled` events from HyperSync
-- Shows only BUY trades above your threshold
+- Streams Polymarket `OrderFilled` events from HyperSync in real-time
+- Displays only BUY trades above a configurable USD threshold
 - Optionally filters by buyer/wallet addresses
-- Lets you open a selected trade for detailed view
+- Interactive terminal UI with trade detail view
 
-## Requirements
+## What is HyperSync?
 
-- Bun
-- `ENVIO_API_TOKEN` in your environment
+[HyperSync](https://docs.envio.dev/docs/HyperSync/overview) is Envio's high-performance blockchain data retrieval layer. It is a purpose-built alternative to JSON-RPC endpoints, providing up to 2000x faster access to on-chain data across 70+ EVM networks.
+
+## Prerequisites
+
+- [Bun](https://bun.sh)
+- An Envio API token ([get one here](https://docs.envio.dev/docs/HyperSync/api-tokens))
 
 ## Install
 
@@ -25,53 +31,51 @@ bun install
 
 ## Run
 
-On first run, the TUI will prompt you for your HyperSync API key. Enter it and it will be saved to `~/.hypersync/.env` for future runs.
-
 ```bash
-# First run (interactive - asks for API key)
+# First run - prompts for API key and saves to ~/.hypersync/.env
 bun index.ts
 
-# Subsequent runs (uses saved API key)
-bun index.ts
-
-# Custom threshold (still prompted for API key)
+# With a custom threshold (only show trades above $500)
 bun index.ts -t 500
 
-# Threshold + address filter
-bun index.ts -t 500 -a "0xabc...,0xdef...,0x123..."
-```
+# With threshold and address filter
+bun index.ts -t 500 -a "0xabc...,0xdef..."
 
-You can also pre-set the API key in environment or the config file:
-
-```bash
-# Via environment variable
+# Pre-set API key via environment variable
 ENVIO_API_TOKEN=your_key_here bun index.ts
-
-# Via config file (manually create ~/.hypersync/.env)
-echo "ENVIO_API_TOKEN=your_key_here" > ~/.hypersync/.env
-bun index.ts
 ```
 
 ## CLI Flags
 
-- `-t <number>`: USD threshold for BUY trades (default: `100`)
-- `-a <addr1,addr2,...>`: Optional comma-separated addresses to filter trades
+| Flag | Description | Default |
+|---|---|---|
+| `-t <number>` | USD threshold for BUY trades | `100` |
+| `-a <addr1,addr2,...>` | Comma-separated addresses to filter by | All addresses |
 
 ## Keyboard Controls
 
-- `↑` / `↓` (or `k` / `j`): Move selection
-- `Enter`: Open selected trade details
-- `T`: Open threshold popup and apply a new USD threshold
-- `A` / `a`: Open address popup and apply a new address filter
-- `Esc` / `Backspace`: Return from details view
-- `C`: Clear current trade list
-- `Q` or `Ctrl+C`: Quit
+| Key | Action |
+|---|---|
+| `Up` / `Down` (or `k` / `j`) | Move selection |
+| `Enter` | Open trade details |
+| `T` | Set threshold |
+| `A` | Set address filter |
+| `Esc` / `Backspace` | Return from details |
+| `C` | Clear trade list |
+| `Q` / `Ctrl+C` | Quit |
 
-## Notes
+## Related
 
-- If `-a` is not provided, all BUY trades above threshold are shown.
-- Address filter matches buyer/maker/taker fields from decoded trade events.
+- [Track Polymarket Trades](https://github.com/enviodev/track-poly-trades) - lightweight script for Polymarket trade data
+- [Polymarket Indexer](https://github.com/enviodev/polymarket-indexer) - full HyperIndex indexer for Polymarket events
+- [Track Polymarket Trades blog post](https://docs.envio.dev/blog/track-polymarket-trades-hypersync) - step-by-step walkthrough of how to build Polymarket trade tracking with HyperSync
 
-## Publishing Package
+## Documentation
 
-First use the command `bun run build` then `npm publish` command to convert `.ts` file to `.js`.
+- [HyperSync Docs](https://docs.envio.dev/docs/HyperSync/overview)
+- [API Tokens](https://docs.envio.dev/docs/HyperSync/api-tokens)
+
+## Support
+
+- [Discord community](https://discord.com/invite/envio)
+- [Envio Docs](https://docs.envio.dev)
