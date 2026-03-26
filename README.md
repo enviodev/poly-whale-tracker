@@ -2,13 +2,13 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white)](https://discord.com/invite/envio)
 
-A terminal UI (TUI) that shows large BUY trades on Polymarket in real time, powered by [Envio HyperSync](https://docs.envio.dev/docs/HyperSync/overview).
+A terminal UI (TUI) that shows large BUY trades on Polymarket in real-time, powered by [Envio HyperSync](https://docs.envio.dev/docs/HyperSync/overview).
 
 ![poly-whale-tracker TUI](https://raw.githubusercontent.com/enviodev/poly-whale-tracker/refs/heads/main/assets/tui.png)
 
 ## What This Does
 
-- Streams Polymarket `OrderFilled` events from HyperSync in real time
+- Streams Polymarket `OrderFilled` events from HyperSync in real-time
 - Displays only BUY trades above a configurable USD threshold
 - Optionally filters by buyer/wallet addresses
 - Interactive terminal UI with trade detail view
@@ -68,6 +68,7 @@ ENVIO_API_TOKEN=your_key_here bun index.ts
 
 - [Track Polymarket Trades](https://github.com/enviodev/track-poly-trades) - lightweight script for Polymarket trade data
 - [Polymarket Indexer](https://github.com/enviodev/polymarket-indexer) - full HyperIndex indexer for Polymarket events
+- [Track Polymarket Trades blog post](https://docs.envio.dev/blog/track-polymarket-trades-hypersync) - step-by-step walkthrough of how to build Polymarket trade tracking with HyperSync
 
 ## Documentation
 
