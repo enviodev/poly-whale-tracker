@@ -743,8 +743,11 @@ export const bootUI = (screen: blessed.Widgets.Screen, cliArgs: CliArgs) => {
           const orderHash = String(dec.indexed?.[0]?.val ?? "");
           const maker = String(dec.indexed?.[1]?.val ?? "").toLowerCase();
           const taker = String(dec.indexed?.[2]?.val ?? "").toLowerCase();
-          const makerAssetId = String(dec.body?.[0]?.val ?? "0");
-          const takerAssetId = String(dec.body?.[1]?.val ?? "0");
+          // side is from the maker's view: BUY = maker pays collateral (asset id 0)
+          const side = Number(dec.body?.[0]?.val ?? 0);
+          const tokenId = String(dec.body?.[1]?.val ?? "0");
+          const makerAssetId = side === 0 ? "0" : tokenId;
+          const takerAssetId = side === 0 ? tokenId : "0";
           const makerAmountFilled = String(dec.body?.[2]?.val ?? "0");
           const takerAmountFilled = String(dec.body?.[3]?.val ?? "0");
           const fee = String(dec.body?.[4]?.val ?? "0");

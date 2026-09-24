@@ -48,6 +48,7 @@ export const createStartupPrompt = (screen: blessed.Widgets.Screen): {
   });
 
   const startupInput = blessed.textbox({
+    censor: true,
     parent: startupPrompt,
     top: 3,
     left: 0,
