@@ -26,6 +26,8 @@ export const ORDER_FILLED_TOPIC =
 export const loadStoredApiKey = (): string | null => {
   try {
     if (fs.existsSync(HYPERSYNC_ENV_FILE)) {
+      // Keys saved by older versions were readable by other users
+      if (fs.statSync(HYPERSYNC_ENV_FILE).mode & 0o077) fs.chmodSync(HYPERSYNC_ENV_FILE, 0o600);
       const content = fs.readFileSync(HYPERSYNC_ENV_FILE, "utf-8");
       const match = content.match(/^ENVIO_API_TOKEN=(.+)$/m);
       if (match && match[1]) {
@@ -43,9 +45,11 @@ export const saveApiKey = (apiKey: string): boolean => {
     if (!fs.existsSync(HYPERSYNC_CONFIG_DIR)) {
       fs.mkdirSync(HYPERSYNC_CONFIG_DIR, { recursive: true, mode: 0o700 });
     }
-    // The key is a secret, so only the owner can read the file
-    fs.writeFileSync(HYPERSYNC_ENV_FILE, `ENVIO_API_TOKEN=${apiKey}\n`, { mode: 0o600 });
-    fs.chmodSync(HYPERSYNC_ENV_FILE, 0o600);
+    // The key is a secret: write it to a new owner-only file, then swap it in, so it
+    // is never written into an existing file that others could read
+    const tmp = `${HYPERSYNC_ENV_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `ENVIO_API_TOKEN=${apiKey}\n`, { mode: 0o600 });
+    fs.renameSync(tmp, HYPERSYNC_ENV_FILE);
     return true;
   } catch (err) {
     console.error("Failed to save API key:", err);
