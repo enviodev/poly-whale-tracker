@@ -9,16 +9,17 @@ export const ENVIO_URL = process.env.ENVIO_URL ?? "https://polygon.hypersync.xyz
 export const HYPERSYNC_CONFIG_DIR = path.join(process.env.HOME ?? "~", ".hypersync");
 export const HYPERSYNC_ENV_FILE = path.join(HYPERSYNC_CONFIG_DIR, ".env");
 
+// Polymarket CLOB v2 exchanges (https://docs.polymarket.com/resources/contracts)
 export const ORDER_FILLED_SIG =
-  "event OrderFilled(bytes32 indexed orderHash, address indexed maker, address indexed taker, uint256 makerAssetId, uint256 takerAssetId, uint256 makerAmountFilled, uint256 takerAmountFilled, uint256 fee)";
+  "event OrderFilled(bytes32 indexed orderHash, address indexed maker, address indexed taker, uint8 side, uint256 tokenId, uint256 makerAmountFilled, uint256 takerAmountFilled, uint256 fee, bytes32 builder, bytes32 metadata)";
 
 export const EXCHANGE_ADDRESSES = [
-  "0x4bfb41d5b3570defd03c39a9a4d8de6bd8b8982e",
-  "0xc5d563a36ae78145c45a50134d48a1215220f80a",
+  "0xE111180000d2663C0091e4f400237545B87B996B", // CTF Exchange
+  "0xe2222d279d744050d28e00520010520000310F59", // Neg Risk CTF Exchange
 ].map((a) => a.toLowerCase());
 
 export const ORDER_FILLED_TOPIC =
-  "0xd0a08e8c493f9c94f29311604c9de1b4e8c8d4c06bd0c789af57f2d65bfec0f6";
+  "0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee";
 
 // ─── API Key Management ──────────────────────────────────────────────────────
 
