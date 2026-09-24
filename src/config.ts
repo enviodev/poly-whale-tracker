@@ -41,9 +41,11 @@ export const loadStoredApiKey = (): string | null => {
 export const saveApiKey = (apiKey: string): boolean => {
   try {
     if (!fs.existsSync(HYPERSYNC_CONFIG_DIR)) {
-      fs.mkdirSync(HYPERSYNC_CONFIG_DIR, { recursive: true });
+      fs.mkdirSync(HYPERSYNC_CONFIG_DIR, { recursive: true, mode: 0o700 });
     }
-    fs.writeFileSync(HYPERSYNC_ENV_FILE, `ENVIO_API_TOKEN=${apiKey}\n`);
+    // The key is a secret, so only the owner can read the file
+    fs.writeFileSync(HYPERSYNC_ENV_FILE, `ENVIO_API_TOKEN=${apiKey}\n`, { mode: 0o600 });
+    fs.chmodSync(HYPERSYNC_ENV_FILE, 0o600);
     return true;
   } catch (err) {
     console.error("Failed to save API key:", err);
